@@ -112,15 +112,15 @@ def download_file(entry):
         if 'superkingdom' in taxonomy_dict:
             tax_list.append(taxonomy_dict['superkingdom'])
         if 'phylum' in taxonomy_dict:
-            tax_list.append(taxonomy_dict['phylum'])
+            tax_list.append(taxonomy_dict['phylum'].replace(' ', '_'))
         if 'class' in taxonomy_dict:
-            tax_list.append(taxonomy_dict['class'])
+            tax_list.append(taxonomy_dict['class'].replace(' ', '_'))
         if 'order' in taxonomy_dict:
-            tax_list.append(taxonomy_dict['order'])
+            tax_list.append(taxonomy_dict['order'].replace(' ', '_'))
         if 'family' in taxonomy_dict:
-            tax_list.append(taxonomy_dict['family'])
+            tax_list.append(taxonomy_dict['family'].replace(' ', '_'))
         if 'genus' in taxonomy_dict:
-            tax_list.append(taxonomy_dict['genus'])
+            tax_list.append(taxonomy_dict['genus'].replace(' ', '_'))
         if 'species' in taxonomy_dict:
             tax_list.append(taxonomy_dict['species'].replace(' ', '_'))
         if 'subspecies' in taxonomy_dict:
