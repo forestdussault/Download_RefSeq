@@ -108,18 +108,23 @@ def download_file(entry):
         dirtree = '/mnt/nas/Databases/RefSeq/'
 
         # Simple taxonomy check
-        if 'order' and 'species' in taxonomy_dict:
-            tax_list = [
-                taxonomy_dict['superkingdom'],
-                taxonomy_dict['phylum'],
-                taxonomy_dict['class'],
-                taxonomy_dict['order'],
-                taxonomy_dict['family'],
-                taxonomy_dict['genus'],
-                taxonomy_dict['species'].replace(' ', '_')
-            ]
-        else:
-            break
+        tax_list = []
+        if 'superkingdom' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['superkingdom'])
+        if 'phylum' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['phylum'])
+        if 'class' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['class'])
+        if 'order' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['order'])
+        if 'family' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['family'])
+        if 'genus' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['genus'])
+        if 'species' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['species'].replace(' ', '_'))
+        if 'subspecies' in taxonomy_dict:
+            tax_list.append(taxonomy_dict['subspecies'].replace(' ', '_'))
 
         # Make directory structure if it doesn't already exist
         for level in tax_list:
@@ -144,20 +149,9 @@ def download_file(entry):
 
         accessoryFunctions.download_file(genomic_ftp,
                                          os.path.join(download_folder, file_name),
-                                         hour_start=7,
-                                         hour_end=6,
+                                         hour_start=8,
+                                         hour_end=12,
                                          timeout=6000)
-
-        #         # Begin download
-        #         try:
-        #             accessoryFunctions.download_file(genomic_ftp,
-        #                                              os.path.join(download_folder, file_name),
-        #                                              hour_start=18,
-        #                                              hour_end=6,
-        #                                              timeout=6000)
-        #         except:
-        #             print('Encountered URL error. Trying again in 30 seconds.')
-        #             sleep(30)
 
         # Grab filepath of fasta after download
         file_location = os.path.join(download_folder, file_name)
@@ -181,8 +175,6 @@ def main():
     # Load an old list:
     # TODO: Remove hardcoded path
     download_list = read_download_list('/mnt/nas/Databases/RefSeq/download_list.txt')
-
-    download_list = download_list[:8]
 
     # Multiprocess download
     p = multiprocessing.Pool(processes=4)
