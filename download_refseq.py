@@ -27,7 +27,8 @@ class RefSeqDownload(object):
                          skiprows=1,
                          usecols=fields)
 
-        logging.debug('Filtering for entries where assembly level = {}'.format(self.assembly_level))
+        logging.info('Filtering for entries where assembly level = {}'.format(self.assembly_level))
+        logging.info('Retrieving taxonomy information for {} entries...'.format(len(df)))
 
         # Filter for requested dataset
         if self.assembly_level is not None:
@@ -37,16 +38,14 @@ class RefSeqDownload(object):
         download_list = []
 
         # Iterates through every row of the dataframe and feeds the FTP and taxid into the get_taxonomy function.
-        # ETA: ~60mins
-        # Extremely slow and has no right to be, but it's good enough.
-        logging.debug('Retrieving taxonomy information for {} entries...'.format(len(df)))
+        # TODO: Find a much faster approach. This takes longer than the download itself...
         for index, row in df.iterrows():
             try:
                 to_append = self.get_taxonomy(row['ftp_path'], row['taxid'])
                 download_list.append(to_append)
                 logging.debug('Appending {}'.format(to_append))
             except:
-                logging.debug('Encountered URL error. Trying again in 1 minute.')
+                logging.info('Encountered URL error. Trying again in 1 minute.')
 
                 # Relax for 60 seconds in the event of a timeout
                 sleep(60)
@@ -107,7 +106,7 @@ class RefSeqDownload(object):
         download_folder = os.path.join(self.output_folder, 'raw_files')
 
         # FTP Setup
-        # TODO: This should be passed in as an argument, but I'm having trouble having multiple args with Pool
+        # TODO: This should be passed in as an argument, but I'm having trouble using multiple args with Pool
         url = 'ftp.ncbi.nlm.nih.gov'
         f = ftplib.FTP(url)
         f.login('anonymous')
@@ -184,14 +183,21 @@ class RefSeqDownload(object):
         self.assembly_summary = args.assembly_summary
         self.assembly_level = args.assembly_level
         self.email = args.email
+        self.verbose = args.verbose
+
+        # Set logging level
+        if self.verbose:
+            logging.basicConfig(level=logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.INFO)
 
         # Validation
         if self.assembly_summary is None:
-            print('ERROR: Please provide the path to your assembly_summary file.')
+            logging.error('Please provide the path to your assembly_summary file.')
             quit()
 
         if self.email is None:
-            print('ERROR: Please provide an email address.')
+            logging.error('Please provide an email address.')
             quit()
 
         # Assembly level setup
@@ -211,7 +217,7 @@ class RefSeqDownload(object):
         logging.debug('Download List:\n{}...'.format(self.download_list[:5]))
 
         # Multiprocess download
-        logging.debug('Starting download...')
+        logging.info('Starting download...')
         p = multiprocessing.Pool(processes=4)
         p.map(self.download_file, self.download_list)
         p.close()
@@ -219,7 +225,6 @@ class RefSeqDownload(object):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
     start = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('output_folder',
@@ -234,6 +239,10 @@ def main():
                              'The default is complete_genome. Other options include: '
                              'assembly, contigs, chromosome, scaffold, all',
                         default='complete_genome')
+    parser.add_argument('-v', '--verbose',
+                        help='Set this flag to receive detailed output',
+                        action='store_true',
+                        default=False)
     arguments = parser.parse_args()
 
     RefSeqDownload(arguments)
@@ -242,7 +251,7 @@ def main():
     m, s = divmod(end - start, 60)
     h, m = divmod(m, 60)
 
-    print('\033[92m' + '\033[1m' + '\nFinished RefSeqDownload functions in %d:%02d:%02d ' % (h, m, s) + '\033[0m')
+    print('\033[92m' + '\033[1m' + 'Finished RefSeqDownload functions in %d:%02d:%02d ' % (h, m, s) + '\033[0m')
 
 if __name__ == '__main__':
     main()
