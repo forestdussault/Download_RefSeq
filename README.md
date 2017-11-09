@@ -1,4 +1,4 @@
-# Download_RefSeq.
+# Download_RefSeq
 
 ### Description
 
