@@ -1,6 +1,7 @@
 import os
 import time
 import ftplib
+import logging
 import argparse
 import multiprocessing
 import pandas as pd
@@ -11,7 +12,6 @@ from time import sleep
 
 
 class RefSeqDownload(object):
-
     def get_download_list(self, assembly_summary_file):
         # Define the relevant fields from assembly_summary.txt
         fields = [
@@ -21,7 +21,13 @@ class RefSeqDownload(object):
         ]
 
         # Drop text file into pandas dataframe
-        df = pd.read_csv(assembly_summary_file, delimiter='\t', low_memory=False, skiprows=1, usecols=fields)
+        df = pd.read_csv(assembly_summary_file,
+                         delimiter='\t',
+                         low_memory=False,
+                         skiprows=1,
+                         usecols=fields)
+
+        logging.debug('Filtering for entries where assembly level = {}'.format(self.assembly_level))
 
         # Filter for requested dataset
         if self.assembly_level is not None:
@@ -33,12 +39,14 @@ class RefSeqDownload(object):
         # Iterates through every row of the dataframe and feeds the FTP and taxid into the get_taxonomy function.
         # ETA: ~60mins
         # Extremely slow and has no right to be, but it's good enough.
+        logging.debug('Retrieving taxonomy information for {} entries...'.format(len(df)))
         for index, row in df.iterrows():
             try:
                 to_append = self.get_taxonomy(row['ftp_path'], row['taxid'])
                 download_list.append(to_append)
+                logging.debug('Appending {}'.format(to_append))
             except:
-                print('Encountered URL error. Trying again in 1 minute.')
+                logging.debug('Encountered URL error. Trying again in 1 minute.')
 
                 # Relax for 60 seconds in the event of a timeout
                 sleep(60)
@@ -49,7 +57,6 @@ class RefSeqDownload(object):
 
             # NCBI doesn't like more than 3 requests per second
             sleep(0.33)
-
         return download_list
 
     # Function to fetch taxonomy by taxid via Entrez - returns a dictionary connecting the ftp link to the taxonomy
@@ -60,11 +67,11 @@ class RefSeqDownload(object):
                                retmode='xml',
                                email=self.email)
 
-        # read the search result
+        # Read the search result
         search_result = Entrez.read(search)
         tax_dict = {}
 
-        # get full taxonomy and store in dictionary
+        # Get full taxonomy and store in dictionary
         try:
             for item in search_result[0]['LineageEx']:
                 if item['Rank'] == 'no rank':
@@ -75,9 +82,6 @@ class RefSeqDownload(object):
             pass
 
         tmp = {ftp: tax_dict}
-
-        self.dump_download_list(tmp)
-
         return tmp
 
     def dump_download_list(self, download_list):
@@ -96,8 +100,17 @@ class RefSeqDownload(object):
         """
         Takes an entry from the download list and downloads it.
         """
-        os.mkdir(os.path.join(self.output_folder, 'raw_files'))
+        try:
+            os.mkdir(os.path.join(self.output_folder, 'raw_files'))
+        except FileExistsError:
+            pass
         download_folder = os.path.join(self.output_folder, 'raw_files')
+
+        # FTP Setup
+        # TODO: This should be passed in as an argument, but I'm having trouble having multiple args with Pool
+        url = 'ftp.ncbi.nlm.nih.gov'
+        f = ftplib.FTP(url)
+        f.login('anonymous')
 
         # Grab FTP and taxonomy
         for ftp, taxonomy_dict in entry.items():
@@ -105,38 +118,34 @@ class RefSeqDownload(object):
             # Folder structure will be created from this working directory.
             dirtree = self.output_folder
 
-            # Simple taxonomy check
+            # Taxonomy setup
             tax_list = []
-            if 'superkingdom' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['superkingdom'])
-            if 'phylum' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['phylum'].replace(' ', '_'))
-            if 'class' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['class'].replace(' ', '_'))
-            if 'order' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['order'].replace(' ', '_'))
-            if 'family' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['family'].replace(' ', '_'))
-            if 'genus' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['genus'].replace(' ', '_'))
-            if 'species' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['species'].replace(' ', '_'))
-            if 'subspecies' in taxonomy_dict:
-                tax_list.append(taxonomy_dict['subspecies'].replace(' ', '_'))
+            levels = ['superkingdom',
+                      'phylum',
+                      'class',
+                      'order',
+                      'family',
+                      'genus',
+                      'species',
+                      'subspecies']
+
+            for level in levels:
+                if level in taxonomy_dict:
+                    tax_list.append(taxonomy_dict[level].replace(' ', '_'))
 
             # Make directory structure if it doesn't already exist
-            for level in tax_list:
-                dirtree = os.path.join(dirtree, level)
+            for item in tax_list:
+                dirtree = os.path.join(dirtree, item)
                 try:
                     os.mkdir(dirtree)
                 except OSError:
                     pass
 
             # Navigate to FTP directory
-            self.f.cwd(ftp.replace('ftp://ftp.ncbi.nlm.nih.gov', ''))
+            f.cwd(ftp.replace('ftp://ftp.ncbi.nlm.nih.gov', ''))
 
             # Search through the directory listing for the FASTA we want
-            for file in self.f.nlst():
+            for file in f.nlst():
                 if file.endswith('from_genomic.fna.gz') is True:
                     pass
                 elif file.endswith('_genomic.fna.gz'):
@@ -164,7 +173,7 @@ class RefSeqDownload(object):
 
             # Take it easy
             sleep(0.33)
-            print('Downloaded {} successfully.'.format(file_location))
+            logging.debug('Downloaded {} successfully.'.format(file_location))
 
     def __init__(self, args):
         print('\033[92m' + '\033[1m' + '\nREFSEQ DOWNLOADER' + '\033[0m')
@@ -196,12 +205,13 @@ class RefSeqDownload(object):
         # Retrieve a new list:
         self.download_list = self.get_download_list(self.assembly_summary)
 
-        # FTP Setup
-        url = 'ftp.ncbi.nlm.nih.gov'
-        self.f = ftplib.FTP(url)
-        self.f.login('anonymous')
+        # Store in text file
+        self.dump_download_list(self.download_list)
+
+        logging.debug('Download List:\n{}...'.format(self.download_list[:5]))
 
         # Multiprocess download
+        logging.debug('Starting download...')
         p = multiprocessing.Pool(processes=4)
         p.map(self.download_file, self.download_list)
         p.close()
@@ -209,6 +219,7 @@ class RefSeqDownload(object):
 
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     start = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('output_folder',
@@ -225,7 +236,7 @@ def main():
                         default='complete_genome')
     arguments = parser.parse_args()
 
-    x = RefSeqDownload(arguments)
+    RefSeqDownload(arguments)
 
     end = time.time()
     m, s = divmod(end - start, 60)
