@@ -28,7 +28,7 @@ To install these modules, use: `pip3 install -r requirements.txt`
 
 To download this repository, use: `git clone https://github.com/forestdussault/download_refseq.git`
 
-#### Command Line Arguments
+### Command Line Arguments
 `output_folder` (Required): Path to the folder you would like to download to
 
 `-em, --email` (Required): Email address required to retrieve taxonomy info from NCBI
@@ -49,7 +49,7 @@ i.e. --time 17 6
 
 `-v, --verbose`: Set this flag to receive detailed output
 
-#### Example Usage
+### Example Usage
 Command to download all scaffold level entries in assembly_summary.txt.
 The downloads will only proceed between 6:00PM and 1:00AM:
 
